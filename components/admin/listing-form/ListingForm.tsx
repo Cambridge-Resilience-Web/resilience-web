@@ -164,6 +164,8 @@ const ListingForm = ({ categories, listing, handleSubmit }: Props) => {
       )
       data.removedRelations = removedRelations
     }
+
+    console.log(data)
     handleSubmit(data)
   }
 
@@ -303,7 +305,12 @@ const ListingForm = ({ categories, listing, handleSubmit }: Props) => {
 
               <Field name="image">
                 {({ field, form }: FieldProps) => (
-                  <ImageUpload field={field} form={form} formProps={props} />
+                  <ImageUpload
+                    field={field}
+                    form={form}
+                    formProps={props}
+                    isEditMode={Boolean(listing?.id)}
+                  />
                 )}
               </Field>
 

@@ -1,4 +1,6 @@
-import { useRef, useState, memo } from 'react'
+/* eslint-disable @typescript-eslint/no-misused-promises */
+import { useEffect, useRef, useState, memo } from 'react'
+import Cropper from 'react-easy-crop'
 import Image from 'next/legacy/image'
 import {
   FormControl,
@@ -16,6 +18,16 @@ import {
 } from '@chakra-ui/react'
 
 import optimizeImage from '@helpers/optimizeImage'
+import { getCroppedImg } from './canvasUtils'
+import styles from './ImageUpload.module.scss'
+
+function readFile(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => resolve(reader.result), false)
+    reader.readAsDataURL(file)
+  })
+}
 
 const ImageUpload = ({
   field,
@@ -23,36 +35,82 @@ const ImageUpload = ({
   formProps,
   helperText,
   isRequired = false,
+  isEditMode,
 }: {
   field: any
   form: any
   formProps: any
   helperText?: string
   isRequired?: boolean
+  isEditMode: boolean
 }) => {
   const fileInputRef = useRef<HTMLInputElement>()
-  const [preview, setPreview] = useState<string | ArrayBuffer>()
+  const [imageBeingCropped, setImageBeingCropped] = useState(null)
 
-  const hasImageAlready = field.value && !field.value.name
+  const [crop, setCrop] = useState({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [fileInfo, setFileInfo] = useState<{ name: string; type: string }>()
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null)
+
+  useEffect(() => {
+    if (isEditMode && field.value) {
+      console.log('useEffect')
+      setImageBeingCropped(field.value)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const onCropComplete = async (_croppedArea, croppedAreaPixels) => {
+    // setCroppedAreaPixels(croppedAreaPixels)
+    console.log('onCropComplete', imageBeingCropped, croppedAreaPixels)
+    if (isNaN(croppedAreaPixels.width) || isNaN(croppedAreaPixels.height)) {
+      return
+    }
+
+    try {
+      const croppedImage = await getCroppedImg(
+        imageBeingCropped,
+        croppedAreaPixels,
+      )
+
+      const fileNameRegex = new RegExp(/([^\/]+\.*)$/)
+      const fileName = imageBeingCropped.match(fileNameRegex)[0]
+
+      const croppedImageFile = new File(
+        [croppedImage],
+        fileInfo?.name ?? fileName,
+        {
+          type: fileInfo?.type ?? 'image/png',
+        },
+      )
+
+      console.log('croppedImageFile', croppedImageFile)
+
+      // const reader = new FileReader()
+      // reader.readAsDataURL(croppedImageFile)
+      // reader.onloadend = () => {
+      //   setImageBeingCropped(reader.result)
+      // }
+
+      formProps.setFieldValue('image', croppedImageFile)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const hasImageAlready = Boolean(field.value)
 
   const handleFileInputChange = async (event) => {
     const file = event.target.files[0]
-    const optimizedBlob = await optimizeImage(file)
-    const optimizedFile = new File([optimizedBlob], file.name, {
+    setFileInfo({
+      name: file.name,
       type: file.type,
     })
+    const optimizedBlob = await optimizeImage(file)
 
-    if (optimizedFile?.type.substr(0, 5) === 'image') {
-      const reader = new FileReader()
-      reader.readAsDataURL(optimizedFile)
-      reader.onloadend = () => {
-        setPreview(reader.result)
-      }
-
-      formProps.setFieldValue('image', optimizedFile)
-    } else {
-      setPreview(null)
-    }
+    console.log('handleFileInputChange')
+    setImageBeingCropped(optimizedBlob)
+    formProps.setFieldValue('image', optimizedBlob)
   }
 
   return (
@@ -71,11 +129,26 @@ const ImageUpload = ({
             type="file"
             accept="image/*"
             ref={fileInputRef}
-            onChange={(event) => void handleFileInputChange(event)}
+            onChange={handleFileInputChange}
           />
         </VisuallyHidden>
 
-        {hasImageAlready || preview ? (
+        {(hasImageAlready || imageBeingCropped) && (
+          <div className={styles.cropContainer}>
+            <Cropper
+              classes={{ containerClassName: styles.cropperContainer }}
+              image={imageBeingCropped}
+              crop={crop}
+              zoom={zoom}
+              aspect={6 / 3}
+              onCropChange={setCrop}
+              onCropComplete={onCropComplete}
+              onZoomChange={setZoom}
+            />
+          </div>
+        )}
+
+        {/* {field.value && (
           <div style={{ width: '200px', height: '200px' }}>
             <Image
               alt="Preview of image uploaded by user"
@@ -85,7 +158,8 @@ const ImageUpload = ({
               unoptimized
             />
           </div>
-        ) : (
+        )} */}
+        {!imageBeingCropped && !field.value && (
           <Flex
             width="100%"
             mt={1}
@@ -129,7 +203,12 @@ const ImageUpload = ({
                 >
                   <span>Upload an image</span>
                   <VisuallyHidden>
-                    <input id="file-upload" name="file-upload" type="file" />
+                    <input
+                      id="file-upload"
+                      name="file-upload"
+                      type="file"
+                      accept="image/"
+                    />
                   </VisuallyHidden>
                 </chakra.label>
               </Flex>
@@ -137,7 +216,7 @@ const ImageUpload = ({
           </Flex>
         )}
 
-        {!preview && hasImageAlready && (
+        {hasImageAlready && (
           <Button
             position="absolute"
             colorScheme="blue"

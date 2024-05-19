@@ -26,7 +26,7 @@ const readPhoto = async (photo) => {
   return canvas
 }
 
-const optimizeImage = async (photo): Promise<Blob> => {
+const optimizeImage = async (photo): Promise<string> => {
   let canvas = await readPhoto(photo)
 
   while (canvas.width >= 2 * MAX_WIDTH) {
@@ -37,9 +37,10 @@ const optimizeImage = async (photo): Promise<Blob> => {
     canvas = scaleCanvas(canvas, MAX_WIDTH / canvas.width)
   }
 
-  return new Promise((resolve) => {
-    canvas.toBlob(resolve, 'image/jpeg', QUALITY)
-  })
+  // return new Promise((resolve) => {
+  //   canvas.toBlob(resolve, 'image/jpeg', QUALITY)
+  // })
+  return canvas.toDataURL('image/jpeg', QUALITY)
 }
 
 const scaleCanvas = (canvas, scale) => {
